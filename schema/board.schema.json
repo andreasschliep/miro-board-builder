@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Miro board definition",
+  "description": "YAML definition of a Miro board: frames with shapes, text, sticky notes, cards and connectors.",
+  "type": "object",
+  "required": ["name", "frames"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1, "description": "Board or workshop name" },
+    "code": { "type": "string", "description": "Short identifier" },
+    "version": { "type": ["string", "number"] },
+    "duration": { "type": "string" },
+    "language": { "type": "string" },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "startX": { "type": "number" },
+        "rowSpacing": { "type": "number" },
+        "frameSpacing": { "type": "number" },
+        "defaultFrameWidth": { "type": "number", "exclusiveMinimum": 0 },
+        "defaultFrameHeight": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "colors": {
+      "type": "object",
+      "description": "Named colors that elements can reference",
+      "additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+    },
+    "phases": {
+      "type": "object",
+      "description": "Optional session phases; a frame with `phase: <key>` gets a badge",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "color": { "type": "string" }
+        }
+      }
+    },
+    "style": {
+      "type": "object",
+      "properties": {
+        "headerBar": { "type": "boolean", "description": "Add a title bar to every frame (default true)" },
+        "parentElements": { "type": "boolean", "description": "Make elements children of their frame (default false)" },
+        "frameFill": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/frame" }
+    }
+  },
+  "definitions": {
+    "frame": {
+      "type": "object",
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "row": { "type": "integer", "minimum": 0 },
+        "col": { "type": "integer", "minimum": 0 },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "phase": { "type": "string" },
+        "headerBar": { "type": "boolean" },
+        "fillColor": { "type": "string" },
+        "template": { "type": "string" },
+        "templateData": { "type": "object" },
+        "elements": { "type": "array", "items": { "$ref": "#/definitions/element" } }
+      }
+    },
+    "element": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["text", "shape", "sticky", "card", "image", "embed", "divider", "line", "connector", "group"]
+        },
+        "ref": { "type": "string", "description": "Name used by connectors" },
+        "content": { "type": "string", "description": "Text content; Miro accepts simple HTML" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "x": { "type": "number", "description": "Offset from the frame center" },
+        "y": { "type": "number", "description": "Offset from the frame center" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "shape": { "type": "string", "description": "Miro shape name, e.g. rectangle, round_rectangle, circle, triangle, rhombus" },
+        "color": { "type": "string", "description": "Fill color: hex, Miro color name or a key of `colors`" },
+        "borderColor": { "type": "string" },
+        "textColor": { "type": "string" },
+        "borderWidth": { "type": ["number", "string"] },
+        "fontSize": { "type": "number", "exclusiveMinimum": 0 },
+        "fontFamily": { "type": "string" },
+        "textAlign": { "type": "string", "enum": ["left", "center", "right"] },
+        "url": { "type": "string" },
+        "mode": { "type": "string", "enum": ["inline", "modal"] },
+        "toX": { "type": "number" },
+        "toY": { "type": "number" },
+        "thickness": { "type": "number" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "caption": { "type": "string" },
+        "startCap": { "type": "string" },
+        "endCap": { "type": "string" },
+        "strokeStyle": { "type": "string", "enum": ["normal", "dashed", "dotted"] },
+        "strokeWidth": { "type": "number" },
+        "startSnapTo": { "type": "string", "enum": ["auto", "top", "right", "bottom", "left"] },
+        "endSnapTo": { "type": "string", "enum": ["auto", "top", "right", "bottom", "left"] },
+        "items": { "type": "array", "items": { "$ref": "#/definitions/element" } },
+        "repeat": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": { "type": "array" },
+            "layout": { "type": "string", "enum": ["horizontal", "vertical", "grid", "grid-by-row"] },
+            "spacing": { "type": "number" },
+            "spacingX": { "type": "number" },
+            "spacingY": { "type": "number" },
+            "columns": { "type": "integer", "minimum": 1 },
+            "rows": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

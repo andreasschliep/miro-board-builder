@@ -1,0 +1,24 @@
+node_modules/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+build-log.jsonl
+*.jsonl
+board-plan.json
+*.optimized.yaml
+.layout-cache/
+
+# Logs and OS files
+*.log
+npm-debug.log*
+.DS_Store
+
+# Exports and local tool settings (never commit real data)
+exports/
+*.csv
+*.xlsx
+.claude/settings.local.json

@@ -1,0 +1,26 @@
+{
+  "name": "miro-board-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build Miro boards from a YAML definition via the Miro REST API v2, with a dry-run mode, a per-frame build protocol and an optional Claude-based layout optimizer.",
+  "license": "MIT",
+  "author": "Andreas Schliep",
+  "main": "src/index.js",
+  "bin": {
+    "miro-board": "bin/miro-board.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "validate:example": "node bin/miro-board.js validate examples/testing-fundamentals/board.yaml",
+    "dry-run:example": "node bin/miro-board.js build examples/testing-fundamentals/board.yaml --dry-run"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "ajv": "^8.17.1",
+    "commander": "^12.1.0",
+    "js-yaml": "^4.1.0"
+  }
+}

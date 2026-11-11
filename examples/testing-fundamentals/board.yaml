@@ -1,0 +1,156 @@
+# Fictional example: a 60-minute workshop "Testing Fundamentals" (unit testing
+# for developers). The content is invented for this repository.
+#
+#   npx miro-board validate examples/testing-fundamentals/board.yaml
+#   npx miro-board build examples/testing-fundamentals/board.yaml --dry-run
+
+name: "Testing Fundamentals"
+code: TF-60
+version: "1.0"
+duration: "60 min"
+language: EN
+
+layout:
+  frameSpacing: 1800
+  defaultFrameWidth: 1600
+  defaultFrameHeight: 1000
+
+# Four session phases; a frame with `phase: <key>` gets a small badge.
+phases:
+  C1: { label: "Connections", color: primary }
+  C2: { label: "Concepts", color: secondary }
+  C3: { label: "Concrete Practice", color: accent }
+  C4: { label: "Conclusions", color: highlight }
+
+frames:
+  - id: welcome
+    title: "Welcome & Check-in"
+    phase: C1
+    elements:
+      - type: text
+        content: !include notes/check-in.html
+        x: 0
+        y: -250
+        width: 900
+        fontSize: 20
+        textAlign: center
+      - type: sticky
+        content: "{{prompt}}"
+        x: -450
+        y: -20
+        color: light_yellow
+        repeat:
+          layout: horizontal
+          spacingX: 300
+          data:
+            - { prompt: "The last bug that surprised me..." }
+            - { prompt: "A test that saved me once..." }
+            - { prompt: "What makes tests painful for me..." }
+            - { prompt: "One question I bring today..." }
+
+  - id: anatomy
+    title: "Anatomy of a Unit Test"
+    phase: C2
+    template: columns
+    templateData:
+      columns:
+        - title: "Arrange"
+          items: ["Build the object under test", "Prepare inputs", "Replace slow collaborators"]
+        - title: "Act"
+          items: ["Call exactly one behavior", "Capture the result"]
+        - title: "Assert"
+          items: ["Check one outcome", "Name the expectation", "Fail with a clear message"]
+
+  - id: test-levels
+    title: "Where Tests Live"
+    phase: C2
+    elements:
+      - type: shape
+        ref: unit
+        content: "<p><strong>Unit tests</strong></p><p>many, fast, isolated</p>"
+        x: -450
+        y: 0
+        width: 300
+        height: 140
+        shape: round_rectangle
+        color: secondary
+        textColor: white
+      - type: shape
+        ref: integration
+        content: "<p><strong>Integration tests</strong></p><p>fewer, real collaborators</p>"
+        x: 0
+        y: 0
+        width: 300
+        height: 140
+        shape: round_rectangle
+        color: primary
+        textColor: white
+      - type: shape
+        ref: end-to-end
+        content: "<p><strong>End-to-end tests</strong></p><p>few, whole system</p>"
+        x: 450
+        y: 0
+        width: 300
+        height: 140
+        shape: round_rectangle
+        color: highlight
+        textColor: white
+      - type: connector
+        from: unit
+        to: integration
+        caption: "slower"
+      - type: connector
+        from: integration
+        to: end-to-end
+        caption: "slower still"
+      - type: text
+        content: "<p>Rule of thumb: push each check down to the cheapest level that can catch the bug.</p>"
+        x: 0
+        y: 250
+        width: 900
+        fontSize: 16
+        textAlign: center
+
+  - id: kata
+    title: "Practice: String Calculator Kata"
+    phase: C3
+    template: exercise
+    templateData:
+      timebox: "20 min"
+      instructions: >-
+        Work in pairs. Write the first failing test, make it pass with the
+        simplest code, then refactor. Swap the keyboard after every green test.
+        Start with an empty string and grow the calculator one rule at a time.
+      debrief:
+        - "Which test was hardest to name?"
+        - "Where did you want to skip the failing step?"
+        - "What would you test differently tomorrow?"
+      transition: "Collect one takeaway per person on the next frame."
+
+  - id: wrap-up
+    title: "Takeaways"
+    phase: C4
+    template: cardGrid
+    templateData:
+      columns: 3
+      top: -180
+      cards:
+        - { title: "Small", text: "One behavior per test" }
+        - { title: "Fast", text: "Seconds, not minutes" }
+        - { title: "Readable", text: "The name explains the failure" }
+    elements:
+      - type: sticky
+        content: "My next step: ..."
+        x: -300
+        y: 220
+        color: light_green
+      - type: sticky
+        content: "Still unclear: ..."
+        x: 0
+        y: 220
+        color: light_pink
+      - type: sticky
+        content: "Resource I want: ..."
+        x: 300
+        y: 220
+        color: light_blue
