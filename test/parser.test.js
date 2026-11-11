@@ -92,6 +92,15 @@ test('!include reads files next to the YAML and refuses paths outside', () => {
   assert.throws(() => new BoardParser().parseFile(path.join(dir, 'bad.yaml')), /must stay inside/);
 });
 
+test('!include fails without reading a file when allowInclude is false', () => {
+  const dir = tempDir();
+  fs.writeFileSync(path.join(dir, 'secret.txt'), 'do-not-read\n');
+  const parser = new BoardParser({ basePath: dir, allowInclude: false });
+  const yamlText = 'name: Demo\nframes:\n  - id: a\n    title: A\n    elements:\n      - { type: text, content: !include secret.txt }\n';
+  assert.throws(() => parser.parseString(yamlText), /!include is disabled/);
+  assert.throws(() => parser.loadString(yamlText), (error) => !String(error.message).includes('do-not-read'));
+});
+
 test('parses the example board', () => {
   const board = new BoardParser().parseFile(EXAMPLE);
   assert.equal(board.name, 'Testing Fundamentals');

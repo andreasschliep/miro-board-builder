@@ -32,16 +32,24 @@ class BoardParser {
   /**
    * @param {Object} [options]
    * @param {string} [options.basePath=process.cwd()] - Folder for resolving !include
+   * @param {boolean} [options.allowInclude=true] - Set to false for untrusted input
+   *   (for example YAML written by an agent): `!include` then fails instead of
+   *   reading a local file.
    */
-  constructor({ basePath = process.cwd() } = {}) {
+  constructor({ basePath = process.cwd(), allowInclude = true } = {}) {
     this.basePath = basePath;
+    this.allowInclude = allowInclude;
   }
 
   _schema() {
     const basePath = () => this.basePath;
+    const allowInclude = () => this.allowInclude;
     const includeType = new yaml.Type('!include', {
       kind: 'scalar',
       construct(filename) {
+        if (!allowInclude()) {
+          throw new Error(`!include is disabled for this input: ${filename}`);
+        }
         const root = path.resolve(basePath());
         const target = path.resolve(root, filename);
         if (target !== root && !target.startsWith(root + path.sep)) {
