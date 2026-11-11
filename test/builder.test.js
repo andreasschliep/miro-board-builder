@@ -149,3 +149,76 @@ frames:
   assert.equal(badge.body.data.shape, 'circle');
   assert.equal(badge.body.style.fillColor, '#111111');
 });
+
+function twoFrameBoard() {
+  return new BoardParser().parseString(
+    'name: D\nframes:\n  - id: a\n    title: A\n    elements:\n      - { type: text, content: one, ref: one }\n' +
+    '  - id: b\n    title: B\n    elements:\n      - { type: text, content: two, ref: two }\n      - { type: connector, from: one, to: two }\n'
+  );
+}
+
+function httpError(status) {
+  return Object.assign(new Error(`HTTP ${status}`), { status });
+}
+
+test('an aborted signal stops the build before the first frame', async () => {
+  const { dry, builder } = dryBuild(twoFrameBoard());
+  const controller = new AbortController();
+  controller.abort(new Error('user cancelled'));
+  const result = await builder.build('b', twoFrameBoard(), { signal: controller.signal });
+  assert.equal(result.aborted, true);
+  assert.equal(result.abortReason, 'cancelled: user cancelled');
+  assert.equal(result.framesCreated, 0);
+  assert.equal(dry.calls.length, 0);
+});
+
+test('cancelling during the build stops between frames and keeps what exists', async () => {
+  const controller = new AbortController();
+  const dry = new DryRunTransport();
+  const protocol = { entries: [], record(entry) { this.entries.push(entry); controller.abort(); } };
+  const builder = new BoardBuilder(new MiroClient(dry, { logger: silentLogger }), { protocol, logger: silentLogger });
+  const result = await builder.build('b', twoFrameBoard(), { signal: controller.signal });
+  assert.equal(result.aborted, true);
+  assert.equal(result.framesCreated, 1);
+  assert.equal(result.connectorsCreated, 0);
+  assert.deepEqual(protocol.entries.map((e) => e.frameId), ['a']);
+});
+
+test('HTTP 401 on a frame stops the whole build', async () => {
+  const dry = new DryRunTransport();
+  const original = dry.request.bind(dry);
+  dry.request = async (method, p, body) => {
+    if (p.endsWith('/frames')) throw httpError(401);
+    return original(method, p, body);
+  };
+  const protocol = new FrameProtocol();
+  const builder = new BoardBuilder(new MiroClient(dry, { logger: silentLogger }), { protocol, logger: silentLogger });
+  const result = await builder.build('b', twoFrameBoard());
+  assert.equal(result.aborted, true);
+  assert.match(result.abortReason, /HTTP 401/);
+  assert.deepEqual(protocol.entries.map((e) => [e.frameId, e.status]), [['a', 'failed']]);
+  assert.equal(dry.calls.length, 0);
+});
+
+test('HTTP 403 on an element fails the frame, keeps its id and stops the build', async () => {
+  const dry = new DryRunTransport();
+  const original = dry.request.bind(dry);
+  dry.request = async (method, p, body) => {
+    if (p.endsWith('/texts')) throw httpError(403);
+    return original(method, p, body);
+  };
+  const protocol = new FrameProtocol();
+  const builder = new BoardBuilder(new MiroClient(dry, { logger: silentLogger }), { protocol, logger: silentLogger });
+  const result = await builder.build('b', twoFrameBoard());
+  assert.equal(result.aborted, true);
+  assert.equal(result.errors, 1);
+  assert.deepEqual(protocol.entries.map((e) => [e.frameId, e.status, e.miroId]), [['a', 'failed', 'dry-run-1']]);
+});
+
+test('a build that is not stopped reports aborted: false', async () => {
+  const { builder } = dryBuild(twoFrameBoard());
+  const result = await builder.build('b', twoFrameBoard());
+  assert.equal(result.aborted, false);
+  assert.equal(result.abortReason, null);
+  assert.equal(result.connectorsCreated, 1);
+});

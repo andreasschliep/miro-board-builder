@@ -7,12 +7,31 @@
  * Pass 1 creates every frame and its elements; elements with a `ref` are
  * remembered. Pass 2 creates connectors between referenced elements.
  * Every frame is written to the frame protocol (if one is given).
+ *
+ * The build stops early, keeping what was already created, when
+ * - the optional AbortSignal fires (checked between frames), or
+ * - Miro answers 401, 403 or 404: a missing token, a missing scope or a
+ *   missing board will not fix itself for the next frame.
  */
 
 const defaultTemplates = require('./templates');
 const { resolveFrameElements } = require('./frameElements');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** HTTP statuses that end the whole build instead of only the current item. */
+const FATAL_STATUSES = new Set([401, 403, 404]);
+
+function isFatal(error) {
+  return Boolean(error) && FATAL_STATUSES.has(error.status);
+}
+
+function describeAbort(signal) {
+  const reason = signal && signal.reason;
+  if (reason && reason.message) return `cancelled: ${reason.message}`;
+  if (typeof reason === 'string' && reason) return `cancelled: ${reason}`;
+  return 'cancelled';
+}
 
 class BoardBuilder {
   /**
@@ -45,6 +64,21 @@ class BoardBuilder {
     this.stats = { framesCreated: 0, elementsCreated: 0, connectorsCreated: 0, errors: 0 };
     this.refMap = {};
     this.pendingConnectors = [];
+    this.abortReason = null;
+  }
+
+  /** True when the build must stop; remembers why. */
+  _shouldStop(signal) {
+    if (this.abortReason) return true;
+    if (signal && signal.aborted) {
+      this.abortReason = describeAbort(signal);
+      return true;
+    }
+    return false;
+  }
+
+  _result() {
+    return { ...this.stats, aborted: this.abortReason !== null, abortReason: this.abortReason };
   }
 
   /**
@@ -53,10 +87,18 @@ class BoardBuilder {
    * @param {Object} [options]
    * @param {boolean} [options.clearFirst=false]
    * @param {boolean} [options.dryRun=false] - Only marks protocol entries
+   * @param {AbortSignal} [options.signal] - Stops the build between frames
+   * @returns {Promise<{framesCreated: number, elementsCreated: number, connectorsCreated: number,
+   *   errors: number, aborted: boolean, abortReason: string|null}>}
    */
-  async build(boardId, board, { clearFirst = false, dryRun = false } = {}) {
+  async build(boardId, board, { clearFirst = false, dryRun = false, signal = null } = {}) {
     this._reset();
     this.logger.log(`Building "${board.name}" (${board.frames.length} frames) on board ${boardId}`);
+
+    if (this._shouldStop(signal)) {
+      this.logger.log(`Stopped before the first frame (${this.abortReason})`);
+      return this._result();
+    }
 
     if (clearFirst) {
       const deleted = await this.miro.clearBoard(boardId);
@@ -68,6 +110,7 @@ class BoardBuilder {
     }
 
     for (const frame of board.frames) {
+      if (this._shouldStop(signal)) break;
       const elementsBefore = this.stats.elementsCreated;
       const errorsBefore = this.stats.errors;
       const entry = { boardId, frameId: frame.id, title: frame.title, dryRun };
@@ -87,30 +130,40 @@ class BoardBuilder {
         this.logger.error(`  Frame ${frame.id} failed: ${error.message}`);
         this._record({
           ...entry,
-          miroId: null,
+          miroId: error.frameMiroId || null,
           elements: this.stats.elementsCreated - elementsBefore,
           errors: this.stats.errors - errorsBefore,
           status: 'failed',
           error: error.message
         });
+        if (isFatal(error)) {
+          this.abortReason = `Miro returned HTTP ${error.status}: ${error.message}`;
+          break;
+        }
       }
     }
 
     for (const connector of this.pendingConnectors) {
+      if (this._shouldStop(signal)) break;
       try {
         await this._createConnector(boardId, connector);
         this.stats.connectorsCreated++;
       } catch (error) {
         this.stats.errors++;
         this.logger.error(`  Connector ${connector.from} -> ${connector.to} failed: ${error.message}`);
+        if (isFatal(error)) {
+          this.abortReason = `Miro returned HTTP ${error.status}: ${error.message}`;
+          break;
+        }
       }
     }
 
+    if (this.abortReason) this.logger.log(`Stopped early: ${this.abortReason}`);
     this.logger.log(
       `Done: ${this.stats.framesCreated} frames, ${this.stats.elementsCreated} elements, ` +
       `${this.stats.connectorsCreated} connectors, ${this.stats.errors} errors`
     );
-    return { ...this.stats };
+    return this._result();
   }
 
   _record(entry) {
@@ -130,7 +183,13 @@ class BoardBuilder {
       : {};
 
     const elements = resolveFrameElements(frame, board, this.templates);
-    await this._buildElements(boardId, elements, frame.x, frame.y, ctx);
+    try {
+      await this._buildElements(boardId, elements, frame.x, frame.y, ctx);
+    } catch (error) {
+      // Only fatal errors get here; keep the id of the frame that does exist.
+      if (created && created.id) error.frameMiroId = created.id;
+      throw error;
+    }
     return created;
   }
 
@@ -158,6 +217,8 @@ class BoardBuilder {
           if (element.ref && result.id) this.refMap[element.ref] = result.id;
         }
       } catch (error) {
+        // A fatal error ends the frame and the build; the frame-level handler counts it.
+        if (isFatal(error)) throw error;
         this.stats.errors++;
         this.logger.error(`    ${element.type} failed: ${error.message}`);
       }
@@ -248,4 +309,4 @@ class BoardBuilder {
   }
 }
 
-module.exports = { BoardBuilder };
+module.exports = { BoardBuilder, FATAL_STATUSES };
