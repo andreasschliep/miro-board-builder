@@ -110,6 +110,13 @@ All configuration comes from environment variables; see [`.env.example`](.env.ex
 
 `optimize` uses `claude-opus-5-5` by default (override with `ANTHROPIC_MODEL` or `--model`) with structured JSON output and effort `medium`. It opts into Anthropic's server-side refusal fallback (`fallbacks: "default"`); pass `fallbacks: false` to `LayoutAIClient` to turn that off.
 
+## Use as a library
+
+`require('miro-board-builder')` exports the parser, validator, builder, Miro client and transports. Two options matter when the YAML does not come from you, for example when an agent writes it:
+
+- `new BoardParser({ allowInclude: false })` makes `!include` fail instead of reading a local file.
+- `builder.build(boardId, board, { signal })` stops between frames when the `AbortSignal` fires. Independently of the signal, the build stops when Miro answers 401, 403 or 404. The result then has `aborted: true` and an `abortReason`; everything created before stays on the board and in the frame protocol.
+
 ## Project layout
 
 ```text

@@ -1,6 +1,6 @@
 {
   "name": "miro-board-builder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Build Miro boards from a YAML definition via the Miro REST API v2, with a dry-run mode, a per-frame build protocol and an optional Claude-based layout optimizer.",
   "license": "MIT",
