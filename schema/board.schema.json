@@ -13,13 +13,14 @@
     "layout": {
       "type": "object",
       "properties": {
-        "startX": { "type": "number" },
-        "rowSpacing": { "type": "number" },
-        "frameSpacing": { "type": "number" },
+        "startX": { "type": "number", "description": "x of the centre of the frames in column 0 (default 0)." },
+        "rowSpacing": { "type": "number", "description": "Distance from the centre of one row of frames to the centre of the next (default 1400). Not the gap: use frame height plus gap, e.g. 1000 + 400 = 1400 for the default frame." },
+        "frameSpacing": { "type": "number", "description": "Distance from the centre of one frame to the centre of the next in a row (default 1800). Not the gap: use frame width plus gap, e.g. 1600 + 200 = 1800 for the default frame. Frames of 3000 x 1800 need frameSpacing of at least 3000 and rowSpacing of at least 1800." },
         "defaultFrameWidth": { "type": "number", "exclusiveMinimum": 0 },
         "defaultFrameHeight": { "type": "number", "exclusiveMinimum": 0 }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Where frames go on the board: frame centre x = startX + col * frameSpacing, y = row * rowSpacing."
     },
     "colors": {
       "type": "object",
@@ -41,7 +42,7 @@
       "type": "object",
       "properties": {
         "headerBar": { "type": "boolean", "description": "Add a title bar to every frame (default true)" },
-        "parentElements": { "type": "boolean", "description": "Make elements children of their frame (default false)" },
+        "parentElements": { "type": "boolean", "description": "Make elements children of their frame (default false). With false, moving a frame in Miro leaves its elements where they are." },
         "frameFill": { "type": "string" }
       },
       "additionalProperties": false
@@ -59,10 +60,10 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
         "title": { "type": "string", "minLength": 1 },
-        "row": { "type": "integer", "minimum": 0 },
-        "col": { "type": "integer", "minimum": 0 },
-        "x": { "type": "number" },
-        "y": { "type": "number" },
+        "row": { "type": "integer", "minimum": 0, "description": "Row in the frame grid (default 0); centre y = row * layout.rowSpacing." },
+        "col": { "type": "integer", "minimum": 0, "description": "Column in the frame grid; centre x = layout.startX + col * layout.frameSpacing. Default: the frame's position in the frames list." },
+        "x": { "type": "number", "description": "Absolute x of the frame centre on the board; overrides col." },
+        "y": { "type": "number", "description": "Absolute y of the frame centre on the board; overrides row." },
         "width": { "type": "number", "exclusiveMinimum": 0 },
         "height": { "type": "number", "exclusiveMinimum": 0 },
         "phase": { "type": "string" },
