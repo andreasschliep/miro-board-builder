@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 /**
  * Transports for the Miro REST API v2.
  *
@@ -99,20 +101,30 @@ class HttpTransport {
   }
 
   /**
-   * Upload a file as multipart/form-data: the file as part `resource`, the JSON as
-   * part `data` (Miro's "create image item using file" endpoint).
+   * Upload a file as multipart/form-data, the way `curl -F` sends it: the file as part
+   * `resource` with its file name, the JSON as part `data` without one. (FormData would
+   * give the JSON part the file name "blob", and Miro answers that with HTTP 500.)
    * @param {string} path
    * @param {{data: Object, file: {name: string, contentType: string, bytes: Uint8Array}}} upload
    */
   async upload(path, { data, file }) {
-    // A FormData body is consumed by fetch, so every attempt gets a new one.
-    return this._send('POST', path, () => {
-      const form = new FormData();
-      form.append('resource', new Blob([file.bytes], { type: file.contentType }), file.name);
-      form.append('data', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-      // No Content-Type header: fetch adds it with the multipart boundary.
-      return { headers: {}, body: form };
-    });
+    const boundary = `----miro-board-builder-${crypto.randomUUID()}`;
+    const name = String(file.name).replace(/["\r\n]/g, encodeURIComponent);
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="resource"; filename="${name}"\r\n` +
+          `Content-Type: ${file.contentType}\r\n\r\n`
+      ),
+      Buffer.from(file.bytes),
+      Buffer.from(
+        `\r\n--${boundary}\r\nContent-Disposition: form-data; name="data"\r\n` +
+          `Content-Type: application/json\r\n\r\n${JSON.stringify(data)}\r\n--${boundary}--\r\n`
+      )
+    ]);
+    return this._send('POST', path, () => ({
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body
+    }));
   }
 
   async _send(method, path, makeRequest) {
