@@ -99,3 +99,44 @@ test('DryRunTransport records calls and returns fake ids', async () => {
   assert.equal(plan.calls[0].body.data.title, 'T');
   assert.equal(plan.dryRun, true);
 });
+
+test('upload sends multipart data with the file as "resource", and retries with a fresh body', async () => {
+  const { transport, calls } = makeTransport([fakeResponse(503, 'busy'), fakeResponse(201, { id: 'img' })]);
+  const result = await transport.upload('/boards/b/images', {
+    data: { position: { x: 1, y: 2 } },
+    file: { name: 'logo.svg', contentType: 'image/svg+xml', bytes: Buffer.from('<svg/>') }
+  });
+  assert.deepEqual(result, { id: 'img' });
+  assert.equal(calls.length, 2);
+  for (const { url, init } of calls) {
+    assert.equal(url, 'https://api.miro.com/v2/boards/b/images');
+    assert.equal(init.method, 'POST');
+    assert.equal(init.headers.Authorization, 'Bearer test-token');
+    // fetch sets the multipart boundary itself.
+    assert.equal('Content-Type' in init.headers, false);
+    assert.ok(init.body instanceof FormData);
+    const resource = init.body.get('resource');
+    assert.equal(resource.name, 'logo.svg');
+    assert.equal(resource.type, 'image/svg+xml');
+    assert.equal(await resource.text(), '<svg/>');
+    const data = init.body.get('data');
+    assert.equal(data.type, 'application/json');
+    assert.deepEqual(JSON.parse(await data.text()), { position: { x: 1, y: 2 } });
+  }
+  assert.notEqual(calls[0].init.body, calls[1].init.body);
+});
+
+test('DryRunTransport records an upload without the file bytes', async () => {
+  const dry = new DryRunTransport();
+  const created = await dry.upload('/boards/b/images', {
+    data: { position: { x: 0, y: 0 } },
+    file: { name: 'a.png', contentType: 'image/png', bytes: Buffer.from('1234') }
+  });
+  assert.equal(created.id, 'dry-run-1');
+  assert.deepEqual(dry.calls[0], {
+    seq: 1,
+    method: 'POST',
+    path: '/boards/b/images',
+    body: { data: { position: { x: 0, y: 0 } }, file: { name: 'a.png', contentType: 'image/png', size: 4 } }
+  });
+});

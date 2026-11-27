@@ -268,7 +268,10 @@ class BoardBuilder {
       case 'card':
         return miro.createCard(boardId, element.title || element.content || '', element.description || '', x, y, { parentId });
       case 'image':
-        if (!element.url) throw new Error('image needs a url');
+        if (element.file) {
+          return miro.createImageFromFile(boardId, element.file, x, y, { width: element.width || 400, parentId });
+        }
+        if (!element.url) throw new Error('image needs a url or a file');
         return miro.createImage(boardId, element.url, x, y, { width: element.width || 400, parentId });
       case 'embed':
         if (!element.url) throw new Error('embed needs a url');
@@ -303,6 +306,8 @@ class BoardBuilder {
       strokeWidth: connector.strokeWidth,
       strokeStyle: connector.strokeStyle,
       caption: connector.caption,
+      textColor: connector.textColor,
+      fontSize: connector.fontSize,
       startSnapTo: connector.startSnapTo,
       endSnapTo: connector.endSnapTo
     });

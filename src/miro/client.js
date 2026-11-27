@@ -8,6 +8,9 @@
  * (HttpTransport for real calls, DryRunTransport for planning without network).
  */
 
+const fs = require('fs');
+const path = require('path');
+
 // Miro rejects longer board names.
 const MAX_BOARD_NAME_LENGTH = 60;
 
@@ -33,6 +36,15 @@ const NAMED_COLORS = {
   dark_gray: '#808080',
   black: '#1a1a1a',
   transparent: 'transparent'
+};
+
+// Image files that can be uploaded, by extension.
+const IMAGE_TYPES = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml'
 };
 
 // Friendly connector cap names mapped to Miro API values.
@@ -225,6 +237,22 @@ class MiroClient {
     return this.transport.request('POST', `/boards/${boardId}/images`, this._withParent(payload, parentId));
   }
 
+  /**
+   * Upload a local image file (png, jpg, gif or svg) as an image item.
+   * The file is read here; callers that accept untrusted input must decide which
+   * paths are allowed before they get here.
+   */
+  async createImageFromFile(boardId, filePath, x, y, { width = 400, parentId = null } = {}) {
+    const contentType = IMAGE_TYPES[path.extname(filePath).toLowerCase()];
+    if (!contentType) {
+      throw new Error(`image file ${path.basename(filePath)} must be png, jpg, gif or svg`);
+    }
+    const bytes = fs.readFileSync(filePath);
+    const data = this._withParent({ position: { x, y }, geometry: { width } }, parentId);
+    const file = { name: path.basename(filePath), contentType, bytes };
+    return this.transport.upload(`/boards/${boardId}/images`, { data, file });
+  }
+
   async createEmbed(boardId, url, x, y, { width = 480, mode = 'inline' } = {}) {
     const payload = { data: { url, mode }, position: { x, y }, geometry: { width } };
     return this.transport.request('POST', `/boards/${boardId}/embeds`, payload);
@@ -248,6 +276,9 @@ class MiroClient {
         endStrokeCap: CAP_MAP[options.endCap] || options.endCap || 'stealth'
       }
     };
+    // Caption text: Miro's defaults (dark, 14) unless given.
+    if (options.textColor) payload.style.color = this.convertColor(options.textColor);
+    if (options.fontSize) payload.style.fontSize = String(options.fontSize);
     if (options.caption) payload.captions = [{ content: options.caption, position: '50%' }];
     return this.transport.request('POST', `/boards/${boardId}/connectors`, payload);
   }
@@ -278,4 +309,4 @@ class MiroClient {
   }
 }
 
-module.exports = { MiroClient, MAX_BOARD_NAME_LENGTH, NAMED_COLORS, CAP_MAP };
+module.exports = { MiroClient, MAX_BOARD_NAME_LENGTH, NAMED_COLORS, CAP_MAP, IMAGE_TYPES };

@@ -89,7 +89,7 @@ frames:
     templateData: { instructions: "...", debrief: ["..."] }
 ```
 
-Element types: `text`, `shape`, `sticky`, `card`, `image`, `embed`, `divider`, `line`, `connector`, `group`. The full format is in [`schema/board.schema.json`](schema/board.schema.json); a complete example is in [`examples/testing-fundamentals/board.yaml`](examples/testing-fundamentals/board.yaml) (fictional content).
+Element types: `text`, `shape`, `sticky`, `card`, `image`, `embed`, `divider`, `line`, `connector`, `group`. An `image` comes from a `url` or from a local `file` (png, jpg, gif or svg, relative to the YAML file), which is uploaded. A connector `caption` takes `textColor` and `fontSize`; without them Miro draws it dark at size 14. The full format is in [`schema/board.schema.json`](schema/board.schema.json); a complete example is in [`examples/testing-fundamentals/board.yaml`](examples/testing-fundamentals/board.yaml) (fictional content).
 
 ## Commands
 
@@ -112,9 +112,10 @@ All configuration comes from environment variables; see [`.env.example`](.env.ex
 
 ## Use as a library
 
-`require('miro-board-builder')` exports the parser, validator, builder, Miro client and transports. Two options matter when the YAML does not come from you, for example when an agent writes it:
+`require('miro-board-builder')` exports the parser, validator, builder, Miro client and transports. Three things matter when the YAML does not come from you, for example when an agent writes it:
 
 - `new BoardParser({ allowInclude: false })` makes `!include` fail instead of reading a local file.
+- An `image` with `file` reads that local file and uploads it to Miro. The parser does not restrict these paths; check them yourself, for example against a list of allowed files.
 - `builder.build(boardId, board, { signal })` stops between frames when the `AbortSignal` fires. Independently of the signal, the build stops when Miro answers 401, 403 or 404. The result then has `aborted: true` and an `abortReason`; everything created before stays on the board and in the frame protocol.
 
 ## Project layout

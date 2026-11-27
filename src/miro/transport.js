@@ -92,20 +92,45 @@ class HttpTransport {
   }
 
   async request(method, path, body) {
+    return this._send(method, path, () => ({
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }));
+  }
+
+  /**
+   * Upload a file as multipart/form-data: the file as part `resource`, the JSON as
+   * part `data` (Miro's "create image item using file" endpoint).
+   * @param {string} path
+   * @param {{data: Object, file: {name: string, contentType: string, bytes: Uint8Array}}} upload
+   */
+  async upload(path, { data, file }) {
+    // A FormData body is consumed by fetch, so every attempt gets a new one.
+    return this._send('POST', path, () => {
+      const form = new FormData();
+      form.append('resource', new Blob([file.bytes], { type: file.contentType }), file.name);
+      form.append('data', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+      // No Content-Type header: fetch adds it with the multipart boundary.
+      return { headers: {}, body: form };
+    });
+  }
+
+  async _send(method, path, makeRequest) {
     for (let attempt = 1; ; attempt++) {
       await this._throttle();
       this.stats.requests++;
 
+      const { headers, body } = makeRequest();
       let response;
       try {
         response = await this.fetch(this.baseUrl + path, {
           method,
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
+            ...headers,
             Accept: 'application/json'
           },
-          body: body === undefined ? undefined : JSON.stringify(body),
+          body,
           signal: AbortSignal.timeout(this.timeoutMs)
         });
       } catch (error) {
@@ -160,6 +185,12 @@ class DryRunTransport {
 
     this.counter++;
     return { id: `dry-run-${this.counter}` };
+  }
+
+  /** Records an upload with the file's name, type and size; the bytes are left out. */
+  async upload(path, { data, file }) {
+    const size = file.bytes.length;
+    return this.request('POST', path, { data, file: { name: file.name, contentType: file.contentType, size } });
   }
 
   /** Plan document written by `build --dry-run`. */

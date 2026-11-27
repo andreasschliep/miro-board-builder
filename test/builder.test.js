@@ -222,3 +222,48 @@ test('a build that is not stopped reports aborted: false', async () => {
   assert.equal(result.abortReason, null);
   assert.equal(result.connectorsCreated, 1);
 });
+
+test('an image with a file is uploaded, one with a url is created from the url', async () => {
+  const dir = tempDir();
+  fs.writeFileSync(path.join(dir, 'logo.png'), 'png-bytes');
+  const yamlPath = path.join(dir, 'board.yaml');
+  fs.writeFileSync(yamlPath, `
+name: D
+style: { headerBar: false }
+frames:
+  - id: a
+    title: A
+    elements:
+      - { type: image, file: logo.png, width: 200, x: -100 }
+      - { type: image, url: "https://example.com/x.png", width: 200, x: 100 }
+`);
+  const board = new BoardParser().parseFile(yamlPath);
+  // Relative files are resolved against the folder of the YAML, like !include.
+  assert.equal(board.frames[0].elements[0].file, path.join(dir, 'logo.png'));
+  const { dry, builder } = dryBuild(board);
+  const stats = await builder.build('b', board);
+  assert.equal(stats.errors, 0);
+  const images = dry.calls.filter((c) => c.path.endsWith('/images'));
+  assert.equal(images[0].body.file.name, 'logo.png');
+  assert.deepEqual(images[0].body.data.geometry, { width: 200 });
+  assert.equal(images[1].body.data.url, 'https://example.com/x.png');
+});
+
+test('connector textColor and fontSize style the caption', async () => {
+  const board = new BoardParser().parseString(`
+name: D
+style: { headerBar: false }
+frames:
+  - id: a
+    title: A
+    elements:
+      - { type: shape, ref: l, content: L }
+      - { type: shape, ref: r, content: R }
+      - { type: connector, from: l, to: r, caption: go, textColor: white, fontSize: 40 }
+`);
+  const { dry, builder } = dryBuild(board);
+  await builder.build('b', board);
+  const connector = dry.calls.find((c) => c.path.endsWith('/connectors'));
+  assert.equal(connector.body.style.color, '#ffffff');
+  assert.equal(connector.body.style.fontSize, '40');
+});

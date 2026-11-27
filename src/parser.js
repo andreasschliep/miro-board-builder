@@ -127,6 +127,10 @@ class BoardParser {
   }
 
   _normalizeElement(element, board) {
+    // A local image file is resolved against the folder of the YAML, like !include.
+    if (element.type === 'image' && typeof element.file === 'string' && !path.isAbsolute(element.file)) {
+      element.file = path.resolve(this.basePath, element.file);
+    }
     for (const field of COLOR_FIELDS) {
       if (element[field] && board.colors[element[field]]) {
         element[field] = board.colors[element[field]];
