@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 /**
  * Transports for the Miro REST API v2.
  *
@@ -92,20 +94,55 @@ class HttpTransport {
   }
 
   async request(method, path, body) {
+    return this._send(method, path, () => ({
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }));
+  }
+
+  /**
+   * Upload a file as multipart/form-data, the way `curl -F` sends it: the file as part
+   * `resource` with its file name, the JSON as part `data` without one. (FormData would
+   * give the JSON part the file name "blob", and Miro answers that with HTTP 500.)
+   * @param {string} path
+   * @param {{data: Object, file: {name: string, contentType: string, bytes: Uint8Array}}} upload
+   */
+  async upload(path, { data, file }) {
+    const boundary = `----miro-board-builder-${crypto.randomUUID()}`;
+    const name = String(file.name).replace(/["\r\n]/g, encodeURIComponent);
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="resource"; filename="${name}"\r\n` +
+          `Content-Type: ${file.contentType}\r\n\r\n`
+      ),
+      Buffer.from(file.bytes),
+      Buffer.from(
+        `\r\n--${boundary}\r\nContent-Disposition: form-data; name="data"\r\n` +
+          `Content-Type: application/json\r\n\r\n${JSON.stringify(data)}\r\n--${boundary}--\r\n`
+      )
+    ]);
+    return this._send('POST', path, () => ({
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body
+    }));
+  }
+
+  async _send(method, path, makeRequest) {
     for (let attempt = 1; ; attempt++) {
       await this._throttle();
       this.stats.requests++;
 
+      const { headers, body } = makeRequest();
       let response;
       try {
         response = await this.fetch(this.baseUrl + path, {
           method,
           headers: {
             Authorization: `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
+            ...headers,
             Accept: 'application/json'
           },
-          body: body === undefined ? undefined : JSON.stringify(body),
+          body,
           signal: AbortSignal.timeout(this.timeoutMs)
         });
       } catch (error) {
@@ -160,6 +197,12 @@ class DryRunTransport {
 
     this.counter++;
     return { id: `dry-run-${this.counter}` };
+  }
+
+  /** Records an upload with the file's name, type and size; the bytes are left out. */
+  async upload(path, { data, file }) {
+    const size = file.bytes.length;
+    return this.request('POST', path, { data, file: { name: file.name, contentType: file.contentType, size } });
   }
 
   /** Plan document written by `build --dry-run`. */

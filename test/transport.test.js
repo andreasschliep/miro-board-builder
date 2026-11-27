@@ -99,3 +99,56 @@ test('DryRunTransport records calls and returns fake ids', async () => {
   assert.equal(plan.calls[0].body.data.title, 'T');
   assert.equal(plan.dryRun, true);
 });
+
+test('upload sends multipart data like curl -F: the file as "resource", the JSON as "data" without a file name', async () => {
+  const { transport, calls } = makeTransport([fakeResponse(503, 'busy'), fakeResponse(201, { id: 'img' })]);
+  const result = await transport.upload('/boards/b/images', {
+    data: { position: { x: 1, y: 2 } },
+    file: { name: 'logo.svg', contentType: 'image/svg+xml', bytes: Buffer.from('<svg/>') }
+  });
+  assert.deepEqual(result, { id: 'img' });
+  assert.equal(calls.length, 2, 'retried once');
+  for (const { url, init } of calls) {
+    assert.equal(url, 'https://api.miro.com/v2/boards/b/images');
+    assert.equal(init.method, 'POST');
+    assert.equal(init.headers.Authorization, 'Bearer test-token');
+    const boundary = /^multipart\/form-data; boundary=(\S+)$/.exec(init.headers['Content-Type'])[1];
+    const parts = Buffer.from(init.body).toString('utf8').split(`--${boundary}`);
+    assert.equal(parts.at(-1), '--\r\n');
+    assert.equal(
+      parts[1],
+      '\r\nContent-Disposition: form-data; name="resource"; filename="logo.svg"\r\n' +
+        'Content-Type: image/svg+xml\r\n\r\n<svg/>\r\n'
+    );
+    // Miro answered 500 when this part carried a file name, as FormData adds for a Blob.
+    assert.equal(
+      parts[2],
+      '\r\nContent-Disposition: form-data; name="data"\r\n' +
+        'Content-Type: application/json\r\n\r\n{"position":{"x":1,"y":2}}\r\n'
+    );
+  }
+});
+
+test('upload keeps quotes and line breaks out of the file name', async () => {
+  const { transport, calls } = makeTransport([fakeResponse(201, { id: 'img' })]);
+  await transport.upload('/boards/b/images', {
+    data: {},
+    file: { name: 'a"b\r\nc.png', contentType: 'image/png', bytes: Buffer.from('x') }
+  });
+  assert.match(Buffer.from(calls[0].init.body).toString('utf8'), /filename="a%22b%0D%0Ac\.png"/);
+});
+
+test('DryRunTransport records an upload without the file bytes', async () => {
+  const dry = new DryRunTransport();
+  const created = await dry.upload('/boards/b/images', {
+    data: { position: { x: 0, y: 0 } },
+    file: { name: 'a.png', contentType: 'image/png', bytes: Buffer.from('1234') }
+  });
+  assert.equal(created.id, 'dry-run-1');
+  assert.deepEqual(dry.calls[0], {
+    seq: 1,
+    method: 'POST',
+    path: '/boards/b/images',
+    body: { data: { position: { x: 0, y: 0 } }, file: { name: 'a.png', contentType: 'image/png', size: 4 } }
+  });
+});

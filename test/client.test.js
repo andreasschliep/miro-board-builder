@@ -5,7 +5,9 @@ const assert = require('node:assert/strict');
 
 const { MiroClient, MAX_BOARD_NAME_LENGTH } = require('../src/miro/client');
 const { DryRunTransport } = require('../src/miro/transport');
-const { silentLogger } = require('./helpers');
+const fs = require('fs');
+const path = require('path');
+const { silentLogger, tempDir } = require('./helpers');
 
 test('board names longer than 60 characters are rejected before any call', async () => {
   const dry = new DryRunTransport();
@@ -91,4 +93,46 @@ test('getAllItems follows the cursor', async () => {
   const items = await new MiroClient(transport).getAllItems('b');
   assert.deepEqual(items.map((i) => i.id), [1, 2]);
   assert.equal(paths[1], '/boards/b/items?limit=50&cursor=abc');
+});
+
+test('connector captions take a text colour and a font size when given', async () => {
+  const dry = new DryRunTransport();
+  const miro = new MiroClient(dry);
+  await miro.createConnector('b', 's', 'e', { caption: 'c', textColor: 'red', fontSize: 42 });
+  await miro.createConnector('b', 's', 'e', { caption: 'c' });
+  assert.equal(dry.calls[0].body.style.color, '#ea4e4e');
+  assert.equal(dry.calls[0].body.style.fontSize, '42');
+  // Without them the payload stays as before: Miro's own caption defaults.
+  assert.equal('color' in dry.calls[1].body.style, false);
+  assert.equal('fontSize' in dry.calls[1].body.style, false);
+});
+
+test('createImageFromFile uploads the file with its position and width', async () => {
+  const dir = tempDir();
+  const file = path.join(dir, 'logo.svg');
+  fs.writeFileSync(file, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 1"></svg>');
+  const dry = new DryRunTransport();
+  await new MiroClient(dry).createImageFromFile('b', file, 10, 20, { width: 300, parentId: 'f1' });
+  const [call] = dry.calls;
+  assert.equal(call.method, 'POST');
+  assert.equal(call.path, '/boards/b/images');
+  assert.deepEqual(call.body.data, {
+    position: { x: 10, y: 20 },
+    geometry: { width: 300 },
+    parent: { id: 'f1' }
+  });
+  assert.equal(call.body.file.name, 'logo.svg');
+  assert.equal(call.body.file.contentType, 'image/svg+xml');
+  assert.equal(call.body.file.size, fs.statSync(file).size);
+});
+
+test('createImageFromFile refuses unknown file types and missing files before any call', async () => {
+  const dir = tempDir();
+  const text = path.join(dir, 'notes.txt');
+  fs.writeFileSync(text, 'secret');
+  const dry = new DryRunTransport();
+  const miro = new MiroClient(dry);
+  await assert.rejects(miro.createImageFromFile('b', text, 0, 0), /png, jpg, gif or svg/);
+  await assert.rejects(miro.createImageFromFile('b', path.join(dir, 'none.png'), 0, 0), /ENOENT/);
+  assert.equal(dry.calls.length, 0);
 });
